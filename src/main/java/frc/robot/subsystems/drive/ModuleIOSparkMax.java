@@ -13,11 +13,10 @@
 
 package frc.robot.subsystems.drive;
 
+import com.ctre.phoenix6.BaseStatusSignal;
+import com.ctre.phoenix6.StatusSignal;
 import com.ctre.phoenix6.configs.CANcoderConfiguration;
-import com.ctre.phoenix6.configs.MagnetSensorConfigs;
 import com.ctre.phoenix6.hardware.CANcoder;
-import com.ctre.phoenix6.signals.AbsoluteSensorRangeValue;
-import com.ctre.phoenix6.signals.SensorDirectionValue;
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMax.IdleMode;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
@@ -49,8 +48,13 @@ public class ModuleIOSparkMax implements ModuleIO {
 
   private final RelativeEncoder driveEncoder;
   private final RelativeEncoder turnRelativeEncoder;
-  public final CANcoder azimuth;
-  private final double offset = 0;
+
+  private final StatusSignal<Double> turnAbsolutePosition;
+  private Double turnDouble = null;
+
+  private final CANcoder cancoder;
+
+  private final Rotation2d absoluteEncoderOffset;
   private final Queue<Double> drivePositionQueue;
   private final Queue<Double> turnPositionQueue;
 
@@ -61,57 +65,39 @@ public class ModuleIOSparkMax implements ModuleIO {
       case 0: // FL
         driveSparkMax = new CANSparkMax(25, MotorType.kBrushless);
         turnSparkMax = new CANSparkMax(24, MotorType.kBrushless);
-        azimuth = new CANcoder(33);
-        azimuth
-            .getConfigurator()
-            .apply(
-                new MagnetSensorConfigs()
-                    .withSensorDirection(SensorDirectionValue.CounterClockwise_Positive));
-
+        cancoder = new CANcoder(33);
+        absoluteEncoderOffset =
+            new Rotation2d(Units.rotationsToRadians(0.668)); // MUST BE CALIBRATED
         break;
       case 1: // FR
         driveSparkMax = new CANSparkMax(27, MotorType.kBrushless);
         turnSparkMax = new CANSparkMax(26, MotorType.kBrushless);
-        azimuth = new CANcoder(30);
-        azimuth
-            .getConfigurator()
-            .apply(
-                new MagnetSensorConfigs()
-                    .withSensorDirection(SensorDirectionValue.CounterClockwise_Positive));
+        cancoder = new CANcoder(30);
+        absoluteEncoderOffset = new Rotation2d(Units.rotationsToRadians(0.780 - 0.5));
+
         break;
       case 2: // BL
         driveSparkMax = new CANSparkMax(23, MotorType.kBrushless);
         turnSparkMax = new CANSparkMax(22, MotorType.kBrushless);
-        azimuth = new CANcoder(32);
-        azimuth
-            .getConfigurator()
-            .apply(
-                new MagnetSensorConfigs()
-                    .withSensorDirection(SensorDirectionValue.CounterClockwise_Positive));
+        cancoder = new CANcoder(32);
+        absoluteEncoderOffset =
+            new Rotation2d(Units.rotationsToRadians(0.054)); // MUST BE CALIBRATEDD
         break;
       case 3: // BR
         driveSparkMax = new CANSparkMax(21, MotorType.kBrushless);
         turnSparkMax = new CANSparkMax(20, MotorType.kBrushless);
-        azimuth = new CANcoder(31);
-        azimuth
-            .getConfigurator()
-            .apply(
-                new MagnetSensorConfigs()
-                    .withSensorDirection(SensorDirectionValue.CounterClockwise_Positive));
+
+        cancoder = new CANcoder(31);
+        absoluteEncoderOffset =
+            new Rotation2d(Units.rotationsToRadians(0.646)); // MUST BE CALIBRATEDD
         break;
       default:
         throw new RuntimeException("Invalid module index");
     }
 
-    azimuth.getConfigurator().apply(new MagnetSensorConfigs().withMagnetOffset(0.0));
-    azimuth
-        .getConfigurator()
-        .apply(
-            new CANcoderConfiguration()
-                .MagnetSensor.withAbsoluteSensorRange(AbsoluteSensorRangeValue.Unsigned_0To1));
+    cancoder.getConfigurator().apply(new CANcoderConfiguration());
 
-    //
-    // azimuth.configSensorInitializationStrategy(SensorInitializationStrategy.BootToAbsolutePosition);
+    turnAbsolutePosition = cancoder.getAbsolutePosition();
 
     driveSparkMax.restoreFactoryDefaults();
     turnSparkMax.restoreFactoryDefaults();
@@ -150,10 +136,13 @@ public class ModuleIOSparkMax implements ModuleIO {
 
     driveSparkMax.burnFlash();
     turnSparkMax.burnFlash();
+
+    BaseStatusSignal.setUpdateFrequencyForAll(50.0, turnAbsolutePosition);
   }
 
   @Override
   public void updateInputs(ModuleIOInputs inputs) {
+    BaseStatusSignal.refreshAll(turnAbsolutePosition);
     inputs.drivePositionRad =
         Units.rotationsToRadians(driveEncoder.getPosition()) / DRIVE_GEAR_RATIO;
     inputs.driveVelocityRadPerSec =
@@ -162,7 +151,9 @@ public class ModuleIOSparkMax implements ModuleIO {
     inputs.driveCurrentAmps = new double[] {driveSparkMax.getOutputCurrent()};
 
     inputs.turnAbsolutePosition =
-        Rotation2d.fromRadians(azimuth.getAbsolutePosition().getValue() * 360 - offset);
+        Rotation2d.fromRotations(turnAbsolutePosition.getValueAsDouble())
+            .minus(absoluteEncoderOffset);
+    turnDouble = turnAbsolutePosition.getValueAsDouble();
     inputs.turnPosition =
         Rotation2d.fromRotations(turnRelativeEncoder.getPosition() / TURN_GEAR_RATIO);
     inputs.turnVelocityRadPerSec =
