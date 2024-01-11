@@ -81,7 +81,7 @@ public class ModuleIOSparkMax implements ModuleIO {
         turnSparkMax = new CANSparkMax(22, MotorType.kBrushless);
         cancoder = new CANcoder(32);
         absoluteEncoderOffset =
-            new Rotation2d(Units.rotationsToRadians(0.054)); // MUST BE CALIBRATEDD
+            new Rotation2d(Units.rotationsToRadians(0.054)); // MUST BE CALIBRATED
         break;
       case 3: // BR
         driveSparkMax = new CANSparkMax(21, MotorType.kBrushless);
@@ -89,7 +89,7 @@ public class ModuleIOSparkMax implements ModuleIO {
 
         cancoder = new CANcoder(31);
         absoluteEncoderOffset =
-            new Rotation2d(Units.rotationsToRadians(0.646)); // MUST BE CALIBRATEDD
+            new Rotation2d(Units.rotationsToRadians(0.646)); // MUST BE CALIBRATED
         break;
       default:
         throw new RuntimeException("Invalid module index");
@@ -131,8 +131,11 @@ public class ModuleIOSparkMax implements ModuleIO {
         PeriodicFrame.kStatus2, (int) (1000.0 / Module.ODOMETRY_FREQUENCY));
     drivePositionQueue =
         SparkMaxOdometryThread.getInstance().registerSignal(driveEncoder::getPosition);
-    turnPositionQueue =
-        SparkMaxOdometryThread.getInstance().registerSignal(turnRelativeEncoder::getPosition);
+        turnPositionQueue =
+            SparkMaxOdometryThread.getInstance().registerSignal(turnRelativeEncoder::getPosition);
+//    turnPositionQueue =
+//        SparkMaxOdometryThread.getInstance()
+//            .registerSignal(turnAbsolutePosition::getValueAsDouble);
 
     driveSparkMax.burnFlash();
     turnSparkMax.burnFlash();
